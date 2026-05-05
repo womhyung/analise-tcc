@@ -1,27 +1,24 @@
-function gerarInsights(resultado) {
-    let textos = [];
+function gerarTextoCorrido(resultado) {
+    let texto = "Este relatório apresenta a análise das respostas obtidas por meio do questionário aplicado.\n\n";
 
-    for (let p in resultado) {
-        const respostas = resultado[p];
-        const total = Object.values(respostas).reduce((a, b) => a + b, 0);
+    for (let pergunta in resultado) {
+        let respostas = resultado[pergunta];
 
-        let max = 0, dom = "";
+        let total = Object.values(respostas).reduce((a, b) => a + b, 0);
 
-        for (let r in respostas) {
-            if (respostas[r] > max) {
-                max = respostas[r];
-                dom = r;
-            }
-        }
+        let maisFrequente = Object.entries(respostas)
+            .sort((a, b) => b[1] - a[1])[0];
 
-        let perc = ((max / total) * 100).toFixed(1);
+        if (!maisFrequente) continue;
 
-        textos.push(
-            `Na questão "${p}", ${perc}% dos participantes escolheram "${dom}", indicando forte tendência.`
-        );
+        let porcentagem = ((maisFrequente[1] / total) * 100).toFixed(1);
+
+        texto += `Na questão "${pergunta}", observou-se que a resposta mais frequente foi "${maisFrequente[0]}", representando ${porcentagem}% dos participantes. `;
+
+        texto += "As demais respostas apresentaram menor frequência, indicando diversidade de opiniões.\n\n";
     }
 
-    return textos;
+    return texto;
 }
 
-module.exports = gerarInsights;
+module.exports = gerarTextoCorrido;

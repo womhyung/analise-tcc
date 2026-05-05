@@ -7,7 +7,7 @@ const Response = require('../models/Response');
 
 const analyzeResponses = require('../services/analyzer');
 const gerarGrafico = require('../services/chartGenerator');
-const gerarInsights = require('../services/insights');
+const gerarTextoCorrido = require('../services/insights'); // 🔥 atualizado
 const analisarTexto = require('../services/aiAnalysis');
 
 const router = express.Router();
@@ -16,33 +16,45 @@ const upload = multer({ storage: multer.memoryStorage() });
 // 🔥 memória fallback
 let dadosMemoria = [];
 
+// ✅ PARSER CSV MELHORADO
 function parseCSV(csv) {
     const linhas = csv.trim().split('\n');
-    const headers = linhas[0].split(',');
+
+    const headers = linhas[0]
+        .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+        .map(h => h.replace(/"/g, '').trim());
 
     return linhas.slice(1).map(l => {
-        const v = l.split(',');
+        const valores = l
+            .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+            .map(v => v.replace(/"/g, '').trim());
+
         let obj = {};
-        headers.forEach((h,i)=> obj[h]=v[i]);
+
+        headers.forEach((h, i) => {
+            if (h.toLowerCase().includes("carimbo")) return; // ❌ remove timestamp
+            obj[h] = valores[i] || "";
+        });
+
         return { respostas: obj };
     });
 }
 
 // 📥 Upload
-router.post('/upload', upload.single('file'), async (req,res)=>{
+router.post('/upload', upload.single('file'), async (req, res) => {
     const dados = parseCSV(req.file.buffer.toString());
 
     if (isConnected()) {
         await Response.insertMany(dados);
-        return res.json({ modo: "banco", msg:"Dados salvos no MongoDB" });
+        return res.json({ modo: "banco", msg: "Dados salvos no MongoDB" });
     } else {
         dadosMemoria = dados;
-        return res.json({ modo: "memoria", msg:"Dados armazenados temporariamente" });
+        return res.json({ modo: "memoria", msg: "Dados armazenados temporariamente" });
     }
 });
 
 // 📄 PDF
-router.get('/export/pdf', async (req,res)=>{
+router.get('/export/pdf', async (req, res) => {
     let dados;
 
     if (isConnected()) {
@@ -52,43 +64,68 @@ router.get('/export/pdf', async (req,res)=>{
     }
 
     const resultado = analyzeResponses(dados);
-    const insights = gerarInsights(resultado);
 
-    const doc = new PDFDocument({ margin:70 });
+    const doc = new PDFDocument({ margin: 70 });
 
-    res.setHeader('Content-Type','application/pdf');
-    res.setHeader('Content-Disposition','attachment; filename=relatorio.pdf');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=relatorio.pdf');
 
     doc.pipe(res);
 
-    doc.text('RELATÓRIO DE ANÁLISE', {align:'center'});
-    doc.addPage();
+    // 🧾 TÍTULO
+    doc.fontSize(18).text('RELATÓRIO DE ANÁLISE DE QUESTIONÁRIO', {
+        align: 'center'
+    });
 
-    for (let p in resultado){
+    doc.moveDown();
+
+    // 🧠 TEXTO CORRIDO (ANTES DOS GRÁFICOS)
+    const texto = gerarTextoCorrido(resultado);
+
+    doc.fontSize(12).text(texto, {
+        align: 'justify'
+    });
+
+    // 📊 GRÁFICOS POR PERGUNTA
+    for (let p in resultado) {
         doc.addPage();
-        doc.text(`Pergunta: ${p}`);
+
+        doc.fontSize(14).text(`Pergunta: ${p}`, { underline: true });
+
+        doc.moveDown();
 
         let r = resultado[p];
 
-        let img = await gerarGrafico(p,r,'pie');
-        doc.image(img,{width:400});
+        // 📊 gráfico pizza
+        let img = await gerarGrafico(p, r, 'pie');
+        doc.image(img, { width: 400 });
 
-        img = await gerarGrafico(p,r,'line');
-        doc.image(img,{width:400});
+        doc.moveDown();
 
-        for (let x in r){
-            doc.text(`${x}: ${r[x]}`);
+        // 📈 gráfico linha
+        img = await gerarGrafico(p, r, 'line');
+        doc.image(img, { width: 400 });
+
+        doc.moveDown();
+
+        // 📋 respostas organizadas
+        for (let x in r) {
+            doc.text(`• ${x}: ${r[x]} respostas`);
         }
     }
 
-    doc.addPage();
-    insights.forEach(i=> doc.text(i));
+    // 🧠 ANÁLISE DE TEXTO (RESPOSTAS ABERTAS)
+    let abertas = dados.map(d => Object.values(d.respostas)).flat();
 
-    let abertas = dados.map(d=>Object.values(d.respostas)).flat();
     let ia = analisarTexto(abertas);
 
     doc.addPage();
-    doc.text(ia.resumo);
+    doc.fontSize(14).text('Análise de Respostas Abertas', { underline: true });
+
+    doc.moveDown();
+    doc.fontSize(12).text(ia.resumo, {
+        align: 'justify'
+    });
 
     doc.end();
 });
