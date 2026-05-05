@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const connectDB = require('./config/db');
+const { connectDB } = require('./config/db');
 
 const app = express();
 
@@ -15,4 +15,4 @@ app.use('/api', require('./routes/analyze'));
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, ()=> console.log("Servidor rodando"));
+app.listen(PORT, () => console.log("Servidor rodando"));

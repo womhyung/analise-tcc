@@ -1,13 +1,24 @@
 const mongoose = require('mongoose');
 
+let conectado = false;
+
 const connectDB = async () => {
+    if (!process.env.MONGO_URI) {
+        console.log("⚠️ MongoDB não configurado. Usando modo memória.");
+        return false;
+    }
+
     try {
         await mongoose.connect(process.env.MONGO_URI);
-        console.log("MongoDB conectado");
+        console.log("✅ MongoDB conectado");
+        conectado = true;
+        return true;
     } catch (err) {
-        console.error(err);
-        process.exit(1);
+        console.log("❌ Erro MongoDB. Usando modo memória.");
+        return false;
     }
 };
 
-module.exports = connectDB;
+const isConnected = () => conectado;
+
+module.exports = { connectDB, isConnected };
