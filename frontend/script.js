@@ -10,7 +10,7 @@ function setStatus(msg, cor = "#ccc") {
     status.style.color = cor;
 }
 
-// 🔒 bloquear botões
+// 🔒 Bloquear botões durante processamento
 function toggleButtons(disabled) {
     document.querySelectorAll("button").forEach(btn => {
         btn.disabled = disabled;
@@ -30,8 +30,8 @@ async function upload() {
         return;
     }
 
-    if (!f.name.endsWith(".csv")) {
-        setStatus("❌ O arquivo deve ser .csv (Google Forms)", "red");
+    if (!f.name.toLowerCase().endsWith(".csv")) {
+        setStatus("❌ O arquivo deve ser .csv (exportado do Google Forms)", "red");
         return;
     }
 
@@ -48,6 +48,8 @@ async function upload() {
             method: 'POST',
             body: fd
         });
+
+        if (!res.ok) throw new Error("Erro no upload");
 
         const data = await res.json();
 
@@ -67,7 +69,7 @@ async function upload() {
     toggleButtons(false);
 }
 
-// 📚 Upload Texto Base
+// 📚 Upload Texto Base (PDF/DOC/TXT)
 async function uploadBase() {
 
     if (carregando) return;
@@ -82,7 +84,7 @@ async function uploadBase() {
     const permitido = ['.pdf', '.doc', '.docx', '.txt'];
 
     if (!permitido.some(ext => f.name.toLowerCase().endsWith(ext))) {
-        setStatus("❌ Formato inválido (PDF, DOC ou TXT)", "red");
+        setStatus("❌ Formato inválido (use PDF, DOC ou TXT)", "red");
         return;
     }
 
@@ -95,12 +97,14 @@ async function uploadBase() {
     setStatus("⏳ Integrando referencial teórico...");
 
     try {
-        await fetch(`${API_URL}/api/upload/base`, {
+        const res = await fetch(`${API_URL}/api/upload/base`, {
             method: 'POST',
             body: fd
         });
 
-        setStatus(`📚 Texto incorporado com sucesso\n📁 ${f.name}`, "#4ade80");
+        if (!res.ok) throw new Error("Erro no upload base");
+
+        setStatus(`📚 Texto base incorporado com sucesso\n📁 ${f.name}`, "#4ade80");
 
     } catch (err) {
         console.error(err);
@@ -128,20 +132,28 @@ async function pdf() {
 
     try {
 
-        // 🔍 verifica se servidor responde
         const res = await fetch(`${API_URL}/api/export/pdf`);
 
         if (!res.ok) {
             throw new Error("Erro ao gerar PDF");
         }
 
-        // 🔥 abre PDF corretamente
         const blob = await res.blob();
+
+        // 🔥 DOWNLOAD AUTOMÁTICO (funciona em todos navegadores)
         const url = window.URL.createObjectURL(blob);
 
-        window.open(url);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = "relatorio-tcc.pdf";
 
-        setStatus("✅ Relatório gerado com sucesso!", "#4ade80");
+        document.body.appendChild(link);
+        link.click();
+
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        setStatus("✅ PDF gerado e baixado com sucesso!", "#4ade80");
 
     } catch (err) {
         console.error(err);
