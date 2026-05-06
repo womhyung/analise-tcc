@@ -1,5 +1,3 @@
-// (código reduzido só na explicação — aqui vai COMPLETO)
-
 const express = require('express');
 const multer = require('multer');
 const PDFDocument = require('pdfkit');
@@ -18,6 +16,30 @@ const upload = multer({ storage: multer.memoryStorage() });
 let dadosMemoria = [];
 let textosBase = [];
 
+// ✅ FUNÇÃO QUE ESTAVA FALTANDO
+function parseCSV(csv) {
+    const linhas = csv.trim().split('\n');
+
+    const headers = linhas[0]
+        .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+        .map(h => h.replace(/"/g, '').trim());
+
+    return linhas.slice(1).map(l => {
+        const valores = l
+            .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+            .map(v => v.replace(/"/g, '').trim());
+
+        let obj = {};
+
+        headers.forEach((h, i) => {
+            if (h.toLowerCase().includes("carimbo")) return;
+            obj[h] = valores[i] || "";
+        });
+
+        return { respostas: obj };
+    });
+}
+
 // detectar aberta
 function ehPerguntaAberta(respostas) {
     const total = Object.values(respostas).reduce((a, b) => a + b, 0);
@@ -25,113 +47,107 @@ function ehPerguntaAberta(respostas) {
     return (unicas / total) > 0.7;
 }
 
-// upload CSV
+// 📊 Upload CSV (AGORA SEGURO)
 router.post('/upload', upload.single('file'), async (req, res) => {
-    const dados = parseCSV(req.file.buffer.toString());
+    try {
 
-    if (isConnected()) {
-        await Response.insertMany(dados);
-        return res.json({ modo: "banco" });
-    } else {
-        dadosMemoria = dados;
-        return res.json({ modo: "memoria" });
+        if (!req.file) {
+            return res.status(400).json({ erro: "Arquivo não enviado" });
+        }
+
+        const csv = req.file.buffer.toString('utf-8');
+
+        const dados = parseCSV(csv);
+
+        if (!dados.length) {
+            return res.status(400).json({ erro: "CSV vazio ou inválido" });
+        }
+
+        if (isConnected()) {
+            await Response.insertMany(dados);
+            return res.json({ modo: "banco" });
+        } else {
+            dadosMemoria = dados;
+            return res.json({ modo: "memoria" });
+        }
+
+    } catch (err) {
+        console.error("🔥 ERRO UPLOAD:", err);
+        res.status(500).json({ erro: "Erro interno no servidor" });
     }
 });
 
-// upload base
+// 📚 Upload base
 router.post('/upload/base', upload.single('file'), async (req, res) => {
-    const texto = req.file.buffer.toString('utf-8').trim();
+    try {
+        if (!req.file) {
+            return res.status(400).json({ erro: "Arquivo não enviado" });
+        }
 
-    if (texto.length > 50) {
-        textosBase.push(texto);
+        const texto = req.file.buffer.toString('utf-8').trim();
+
+        if (texto.length > 50) {
+            textosBase.push(texto);
+        }
+
+        res.json({ msg: "Texto base enviado" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ erro: "Erro no upload base" });
     }
-
-    res.json({ msg: "Texto base enviado" });
 });
 
-// PDF
+// 📄 PDF
 router.get('/export/pdf', async (req, res) => {
+    try {
 
-    let dados = isConnected() ? await Response.find() : dadosMemoria;
+        let dados = isConnected() ? await Response.find() : dadosMemoria;
 
-    const resultado = analyzeResponses(dados);
-    const texto = gerarTextoCorrido(resultado);
+        if (!dados.length) {
+            return res.status(400).send("Sem dados");
+        }
 
-    const doc = new PDFDocument({ margin: 70 });
+        const resultado = analyzeResponses(dados);
+        const texto = gerarTextoCorrido(resultado);
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=relatorio.pdf');
+        const doc = new PDFDocument({ margin: 70 });
 
-    doc.pipe(res);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename=relatorio.pdf');
 
-    // CAPA
-    doc.fontSize(20).text('RELATÓRIO DE ANÁLISE DE QUESTIONÁRIO', { align: 'center' });
-    doc.addPage();
+        doc.pipe(res);
 
-    // RESULTADOS
-    doc.fontSize(16).text('RESULTADOS E DISCUSSÃO', { underline: true });
-    doc.moveDown();
-    doc.fontSize(12).text(texto, { align: 'justify' });
-
-    // REFERENCIAL EMBUTIDO
-    if (textosBase.length > 0) {
-        doc.moveDown();
-        doc.text("Conforme discutido na literatura:", { align: 'justify' });
-
-        textosBase.forEach((t, i) => {
-            doc.text(`(${i + 1}) ${t}`, { align: 'justify' });
-        });
-    }
-
-    // PERGUNTAS
-    let contador = 1;
-
-    for (let p in resultado) {
-
+        doc.fontSize(20).text('RELATÓRIO DE ANÁLISE', { align: 'center' });
         doc.addPage();
 
-        doc.fontSize(14).text(`${contador}. ${p}`, { underline: true });
-        doc.moveDown();
+        doc.fontSize(12).text(texto, { align: 'justify' });
 
-        let r = resultado[p];
-        const aberta = ehPerguntaAberta(r);
+        for (let p in resultado) {
 
-        if (!aberta) {
+            doc.addPage();
+            doc.fontSize(14).text(p);
 
-            let total = Object.values(r).reduce((a, b) => a + b, 0);
-            let ordenado = Object.entries(r).sort((a, b) => b[1] - a[1]);
+            let r = resultado[p];
 
-            let [resp, qtd] = ordenado[0];
-            let perc = ((qtd / total) * 100).toFixed(1);
+            if (!ehPerguntaAberta(r)) {
 
-            let img = await gerarGrafico(p, r, 'pie');
-            doc.image(img, { width: 450 });
+                let img = await gerarGrafico(p, r, 'pie');
+                doc.image(img, { width: 450 });
 
-            doc.moveDown();
+            } else {
 
-            doc.text(
-                `Observa-se que a alternativa "${resp}" foi predominante, representando ${perc}% das respostas. Esse resultado indica uma tendência clara entre os participantes, sugerindo um padrão de percepção sobre a questão analisada.`,
-                { align: 'justify' }
-            );
-
-        } else {
-
-            const respostasTexto = Object.keys(r);
-            const analise = analisarTexto(respostasTexto);
-
-            doc.text(analise.resumo, { align: 'justify' });
-
-            if (analise.exemplos) {
-                doc.moveDown();
-                doc.text("Exemplos de respostas:");
-                doc.text(analise.exemplos);
+                const analise = analisarTexto(Object.keys(r));
+                doc.text(analise.resumo);
             }
         }
 
-        contador++;
-    }
+        doc.end();
 
-    doc.end();
+    } catch (err) {
+        console.error("🔥 ERRO PDF:", err);
+        res.status(500).send("Erro ao gerar PDF");
+    }
 });
 
 module.exports = router;

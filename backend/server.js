@@ -6,28 +6,37 @@ const { connectDB } = require('./config/db');
 
 const app = express();
 
-// 🔌 Conexão (modo híbrido)
+// 🔌 Conectar ao banco (modo híbrido)
 connectDB();
 
-// 🌐 CORS liberado (importante pro frontend local)
+// 🌐 CORS (libera acesso do front)
 app.use(cors({
-    origin: '*'
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
 }));
 
-// 📦 Middleware
-app.use(express.json());
+// 📦 IMPORTANTE: limites para evitar erro no upload
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 🔗 Rotas
 app.use('/api', require('./routes/analyze'));
 
-// 🧪 Rota de teste (IMPORTANTE pra saber se está online)
+// 🧪 Rota de teste
 app.get('/', (req, res) => {
     res.send('API do Sistema TCC está funcionando 🚀');
+});
+
+// ❌ TRATAMENTO GLOBAL DE ERROS (ESSENCIAL)
+app.use((err, req, res, next) => {
+    console.error("🔥 ERRO GLOBAL:", err);
+    res.status(500).json({ erro: "Erro interno no servidor" });
 });
 
 // 🚀 Porta
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
