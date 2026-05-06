@@ -20,7 +20,6 @@ let textosBase = [];
 function ehPerguntaAberta(respostas) {
     const total = Object.values(respostas).reduce((a, b) => a + b, 0);
     const unicas = Object.keys(respostas).length;
-
     return (unicas / total) > 0.7;
 }
 
@@ -61,9 +60,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// 📥 Upload texto base
+// 📥 Upload base
 router.post('/upload/base', upload.single('file'), async (req, res) => {
-
     const texto = req.file.buffer.toString('utf-8').trim();
 
     if (texto.length > 50) {
@@ -83,7 +81,7 @@ router.get('/export/pdf', async (req, res) => {
     }
 
     const resultado = analyzeResponses(dados);
-    const textoPrincipal = gerarTextoCorrido(resultado);
+    const texto = gerarTextoCorrido(resultado);
 
     const doc = new PDFDocument({ margin: 70 });
 
@@ -92,61 +90,47 @@ router.get('/export/pdf', async (req, res) => {
 
     doc.pipe(res);
 
-    const temReferencial = textosBase.length > 0;
-
-    // =========================
     // CAPA
-    // =========================
     doc.fontSize(20).text('RELATÓRIO DE ANÁLISE DE QUESTIONÁRIO', { align: 'center' });
     doc.moveDown(2);
 
     doc.fontSize(12).text(
-        "Relatório gerado automaticamente a partir dos dados coletados por meio de questionário aplicado.",
+        "Relatório gerado automaticamente a partir dos dados coletados.",
         { align: 'center' }
     );
 
     doc.addPage();
 
-    // =========================
     // INTRODUÇÃO
-    // =========================
     doc.fontSize(16).text('1. INTRODUÇÃO', { underline: true });
     doc.moveDown();
 
-    let intro = "Este relatório apresenta a análise dos dados obtidos por meio da aplicação de um questionário, com o objetivo de compreender o uso de tecnologias educacionais no contexto escolar.";
-
-    if (temReferencial) {
-        intro += " A análise está fundamentada em estudos teóricos que discutem a integração da tecnologia no processo de ensino e aprendizagem.";
-    }
-
-    doc.fontSize(12).text(intro, { align: 'justify' });
+    doc.fontSize(12).text(
+        "Este relatório apresenta a análise dos dados obtidos por meio de questionário.",
+        { align: 'justify' }
+    );
 
     doc.moveDown();
 
-    // =========================
     // RESULTADOS
-    // =========================
     doc.fontSize(16).text('2. RESULTADOS E DISCUSSÃO', { underline: true });
     doc.moveDown();
 
-    doc.fontSize(12).text(textoPrincipal, { align: 'justify' });
+    doc.fontSize(12).text(texto, { align: 'justify' });
 
-    // 🔥 Referencial integrado
-    if (temReferencial) {
+    // 🔥 REFERENCIAL INTEGRADO
+    if (textosBase.length > 0) {
         doc.moveDown();
 
+        doc.text("De acordo com estudos teóricos:", { align: 'justify' });
+
         textosBase.forEach((t, i) => {
-            doc.fontSize(10).text(
-                `Segundo o referencial teórico (${i + 1}), ${t.substring(0, 200)}...`,
-                { align: 'justify' }
-            );
+            doc.text(`(${i + 1}) ${t}`, { align: 'justify' });
             doc.moveDown();
         });
     }
 
-    // =========================
     // ANÁLISE POR PERGUNTA
-    // =========================
     let contador = 1;
 
     for (let p in resultado) {
@@ -160,8 +144,6 @@ router.get('/export/pdf', async (req, res) => {
         const aberta = ehPerguntaAberta(r);
 
         if (!aberta) {
-            // 📊 PERGUNTA FECHADA
-
             let total = Object.values(r).reduce((a, b) => a + b, 0);
             let ordenado = Object.entries(r).sort((a, b) => b[1] - a[1]);
 
@@ -173,68 +155,26 @@ router.get('/export/pdf', async (req, res) => {
 
             doc.moveDown();
 
-            let textoAnalise = `Observa-se que a alternativa mais selecionada foi "${principal[0]}", representando ${porcentagem}% dos participantes, indicando uma tendência predominante entre os respondentes.`;
-
-            if (temReferencial) {
-                textoAnalise += " Esse resultado está em consonância com estudos sobre o uso de tecnologias educacionais no ambiente escolar.";
-            }
-
-            doc.fontSize(12).text(textoAnalise, { align: 'justify' });
-
-            doc.moveDown();
-
-            doc.fontSize(11).text('Distribuição das respostas:', { underline: true });
-            doc.moveDown(0.5);
-
-            ordenado.forEach(([resp, qtd]) => {
-                let perc = ((qtd / total) * 100).toFixed(1);
-                doc.text(`• ${resp}: ${qtd} (${perc}%)`);
-            });
+            doc.text(
+                `A alternativa mais escolhida foi "${principal[0]}" (${porcentagem}%).`,
+                { align: 'justify' }
+            );
 
         } else {
-            // 🧠 PERGUNTA ABERTA
-
             const respostasTexto = Object.keys(r);
             const analise = analisarTexto(respostasTexto);
 
-            let textoAberto = analise.resumo;
-
-            if (temReferencial) {
-                textoAberto += " Essa interpretação pode ser relacionada com estudos que abordam práticas pedagógicas mediadas por tecnologia.";
-            }
-
-            doc.fontSize(12).text(textoAberto, { align: 'justify' });
-
-            doc.moveDown();
+            doc.text(analise.resumo, { align: 'justify' });
 
             if (analise.exemplos) {
-                doc.fontSize(11).text("Exemplos de respostas:", { underline: true });
-                doc.moveDown(0.5);
+                doc.moveDown();
+                doc.text("Exemplos:", { underline: true });
                 doc.text(analise.exemplos);
             }
         }
 
         contador++;
     }
-
-    // =========================
-    // CONCLUSÃO
-    // =========================
-    let abertas = dados.map(d => Object.values(d.respostas)).flat();
-    let ia = analisarTexto(abertas);
-
-    doc.addPage();
-
-    doc.fontSize(16).text('3. CONSIDERAÇÕES FINAIS', { underline: true });
-    doc.moveDown();
-
-    let conclusao = ia.resumo;
-
-    if (temReferencial) {
-        conclusao += " Os resultados dialogam com a literatura da área, reforçando a importância do uso das tecnologias educacionais no processo de ensino e aprendizagem.";
-    }
-
-    doc.fontSize(12).text(conclusao, { align: 'justify' });
 
     doc.end();
 });

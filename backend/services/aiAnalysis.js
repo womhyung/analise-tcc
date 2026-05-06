@@ -1,86 +1,48 @@
 function analisarTexto(lista) {
 
-    const respostas = lista
-        .filter(r => r && r.length > 5)
-        .map(r => r.toLowerCase());
-
-    const temas = {
-        tecnologiaFisica: ['computador', 'notebook', 'projetor', 'datashow', 'tv', 'celular'],
-        tecnologiaDigital: ['google', 'plataforma', 'online', 'internet', 'aplicativo'],
-        metodologia: ['dinamica', 'interativa', 'participacao', 'engajamento'],
-        dificuldade: ['falta', 'dificuldade', 'problema', 'ausencia'],
-        ensino: ['ensino', 'aprendizagem', 'aluno', 'aula']
-    };
-
-    let contagem = {};
-    let exemplos = {};
-
-    // inicializa
-    for (let tema in temas) {
-        contagem[tema] = 0;
-        exemplos[tema] = [];
+    if (!lista || lista.length === 0) {
+        return { resumo: "Não houve respostas suficientes para análise." };
     }
 
-    // 🔍 ANALISA CADA RESPOSTA INDIVIDUALMENTE
-    respostas.forEach(resposta => {
+    const respostas = lista.filter(r => r && r.length > 3);
 
-        for (let tema in temas) {
+    const exemplosLista = respostas.slice(0, 3);
 
-            if (temas[tema].some(p => resposta.includes(p))) {
+    const texto = respostas.join(' ').toLowerCase();
 
-                contagem[tema]++;
+    let ideias = [];
 
-                // guarda exemplo (máx 2 por tema)
-                if (exemplos[tema].length < 2) {
-                    exemplos[tema].push(resposta);
-                }
-
-                break; // evita contar a mesma resposta em vários temas
-            }
-        }
-    });
-
-    const total = respostas.length;
-
-    // 🎯 função auxiliar
-    function porcentagem(valor) {
-        return total > 0 ? ((valor / total) * 100).toFixed(1) : 0;
+    if (texto.includes("tecnologia")) {
+        ideias.push("os participantes apresentam diferentes compreensões sobre o conceito de tecnologia");
     }
 
-    // 🧠 TEXTO ACADÊMICO MELHORADO
-    let texto = "A análise das respostas abertas permite identificar padrões relevantes nas percepções dos participantes acerca do uso das tecnologias educacionais.\n\n";
-
-    if (contagem.tecnologiaFisica > 0) {
-        texto += `Observa-se que ${porcentagem(contagem.tecnologiaFisica)}% dos respondentes associam as tecnologias a recursos físicos, como computadores, projetores e dispositivos móveis, evidenciando uma compreensão mais tradicional do conceito. `;
+    if (texto.includes("computador") || texto.includes("projetor")) {
+        ideias.push("há forte associação com recursos físicos utilizados em sala de aula");
     }
 
-    if (contagem.tecnologiaDigital > 0) {
-        texto += `Por outro lado, ${porcentagem(contagem.tecnologiaDigital)}% destacam o uso de ferramentas digitais e plataformas online, indicando uma ampliação do entendimento para ambientes virtuais de aprendizagem. `;
+    if (texto.includes("internet") || texto.includes("online")) {
+        ideias.push("também foram identificadas menções a tecnologias digitais e ambientes virtuais");
     }
 
-    if (contagem.metodologia > 0) {
-        texto += `Além disso, ${porcentagem(contagem.metodologia)}% das respostas evidenciam a utilização das tecnologias como estratégia metodológica, favorecendo aulas mais dinâmicas, interativas e participativas. `;
+    if (texto.includes("aluno") || texto.includes("participação")) {
+        ideias.push("as respostas indicam relação com o aumento da participação dos alunos");
     }
 
-    if (contagem.dificuldade > 0) {
-        texto += `Entretanto, ${porcentagem(contagem.dificuldade)}% dos participantes apontam dificuldades, principalmente relacionadas à falta de infraestrutura ou suporte técnico adequado. `;
+    let resumo = "A análise das respostas abertas demonstra que ";
+
+    if (ideias.length > 0) {
+        resumo += ideias.join(", ") + ". ";
+    } else {
+        resumo += "existe uma diversidade de opiniões entre os participantes. ";
     }
 
-    texto += "\n\nDe modo geral, os dados indicam que o uso das tecnologias educacionais contribui significativamente para a melhoria do processo de ensino e aprendizagem, promovendo maior engajamento dos alunos e inovação nas práticas pedagógicas.";
-
-    // 🧾 exemplos reais (diferencial forte pra TCC)
-    let exemplosTexto = "\n\nExemplos de respostas dos participantes:\n";
-
-    for (let tema in exemplos) {
-        exemplos[tema].forEach(e => {
-            exemplosTexto += `- "${e}"\n`;
-        });
-    }
+    resumo += "Observa-se que não há uma única definição dominante, indicando múltiplas interpretações sobre o tema abordado.";
 
     return {
-        resumo: texto,
-        exemplos: exemplosTexto,
-        temas: contagem
+        resumo,
+        exemplos: exemplosLista.length > 0
+            ? "• " + exemplosLista.join('\n• ')
+            : null
     };
 }
 
