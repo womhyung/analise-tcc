@@ -6,24 +6,24 @@ const height = 500;
 const canvas = new ChartJSNodeCanvas({
     width,
     height,
-    backgroundColour: 'white' // 🔥 resolve gráfico preto
+    backgroundColour: 'white' // 🔥 ESSENCIAL
 });
 
-// 🎨 Paleta moderna
+// 🎨 cores fortes e visíveis
 const cores = [
     '#6C5CE7', '#00B894', '#0984E3',
     '#FD79A8', '#FDCB6E', '#E17055',
     '#00CEC9', '#A29BFE'
 ];
 
-// 🔥 reduz texto longo
-function reduzirTexto(texto, limite = 30) {
+// 🔥 reduzir texto longo
+function reduzirTexto(texto, limite = 25) {
     return texto.length > limite
         ? texto.substring(0, limite) + '...'
         : texto;
 }
 
-// 🔥 pega TOP respostas
+// 🔥 top respostas (evita gráfico poluído)
 function topRespostas(dados, limite = 6) {
     let ordenado = Object.entries(dados)
         .sort((a, b) => b[1] - a[1]);
@@ -45,7 +45,7 @@ async function gerarGrafico(pergunta, dados, tipo = 'pie') {
 
     const dadosFiltrados = topRespostas(dados);
 
-    const labels = Object.keys(dadosFiltrados).map(l => reduzirTexto(l));
+    const labels = Object.keys(dadosFiltrados).map(reduzirTexto);
     const valores = Object.values(dadosFiltrados);
 
     const config = {
@@ -69,9 +69,7 @@ async function gerarGrafico(pergunta, dados, tipo = 'pie') {
                 legend: {
                     display: true,
                     position: 'bottom',
-                    labels: {
-                        color: '#000'
-                    }
+                    labels: { color: '#000' }
                 },
                 title: {
                     display: true,

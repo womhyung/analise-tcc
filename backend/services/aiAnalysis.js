@@ -6,42 +6,38 @@ function analisarTexto(lista) {
 
     const respostas = lista.filter(r => r && r.length > 3);
 
-    const exemplosLista = respostas.slice(0, 3);
+    const exemplos = respostas.slice(0, 3);
 
-    const texto = respostas.join(' ').toLowerCase();
+    const palavras = respostas.join(' ')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .split(/\s+/);
 
-    let ideias = [];
+    let freq = {};
 
-    if (texto.includes("tecnologia")) {
-        ideias.push("os participantes apresentam diferentes compreensões sobre o conceito de tecnologia");
+    palavras.forEach(p => {
+        if (p.length > 4) {
+            freq[p] = (freq[p] || 0) + 1;
+        }
+    });
+
+    const top = Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(p => p[0]);
+
+    let resumo = `A análise das respostas abertas evidencia que os participantes apresentam diferentes percepções sobre o tema abordado. `;
+
+    if (top.length > 0) {
+        resumo += `Os termos mais recorrentes foram: ${top.join(', ')}, indicando os principais focos das respostas. `;
     }
 
-    if (texto.includes("computador") || texto.includes("projetor")) {
-        ideias.push("há forte associação com recursos físicos utilizados em sala de aula");
-    }
-
-    if (texto.includes("internet") || texto.includes("online")) {
-        ideias.push("também foram identificadas menções a tecnologias digitais e ambientes virtuais");
-    }
-
-    if (texto.includes("aluno") || texto.includes("participação")) {
-        ideias.push("as respostas indicam relação com o aumento da participação dos alunos");
-    }
-
-    let resumo = "A análise das respostas abertas demonstra que ";
-
-    if (ideias.length > 0) {
-        resumo += ideias.join(", ") + ". ";
-    } else {
-        resumo += "existe uma diversidade de opiniões entre os participantes. ";
-    }
-
-    resumo += "Observa-se que não há uma única definição dominante, indicando múltiplas interpretações sobre o tema abordado.";
+    resumo += `Observa-se que não há uma única definição dominante, o que sugere diversidade de entendimento entre os respondentes.`;
 
     return {
         resumo,
-        exemplos: exemplosLista.length > 0
-            ? "• " + exemplosLista.join('\n• ')
+        exemplos: exemplos.length > 0
+            ? "• " + exemplos.join('\n• ')
             : null
     };
 }
