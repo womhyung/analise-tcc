@@ -26,6 +26,7 @@ async function upload() {
 
     let f = document.getElementById('file').files[0];
 
+    // validações
     if (!f) {
         setStatus("⚠️ Selecione um arquivo CSV primeiro!", "orange");
         return;
@@ -36,7 +37,6 @@ async function upload() {
         return;
     }
 
-    // 🔍 valida tamanho (evita travar)
     if (f.size > 5 * 1024 * 1024) {
         setStatus("❌ Arquivo muito grande (máx 5MB)", "red");
         return;
@@ -48,28 +48,42 @@ async function upload() {
     let fd = new FormData();
     fd.append('file', f);
 
-    setStatus("⏳ Processando dados do questionário...");
+    setStatus("⏳ Enviando arquivo para análise...");
 
     try {
+
         const res = await fetch(`${API_URL}/api/upload`, {
             method: 'POST',
             body: fd
         });
 
-        if (!res.ok) throw new Error("Erro no upload");
+        // 🔥 lê resposta como texto primeiro
+        const text = await res.text();
 
-        const data = await res.json();
+        let data;
+
+        try {
+            data = JSON.parse(text);
+        } catch {
+            throw new Error("Resposta inválida do servidor (não é JSON)");
+        }
+
+        // 🔥 mostra erro real do backend
+        if (!res.ok) {
+            throw new Error(data.erro || "Erro no upload");
+        }
 
         dadosEnviados = true;
 
         setStatus(
-            `✅ Dados enviados com sucesso!\nModo: ${data.modo}\nArquivo: ${f.name}`,
+            `✅ Upload realizado com sucesso!\nModo: ${data.modo}\n📁 ${f.name}`,
             "#4ade80"
         );
 
     } catch (err) {
-        console.error(err);
-        setStatus("❌ Falha ao enviar arquivo. Verifique o servidor.", "red");
+        console.error("ERRO REAL:", err);
+
+        setStatus(`❌ ${err.message}`, "red");
     }
 
     carregando = false;
@@ -88,7 +102,7 @@ async function uploadBase() {
         return;
     }
 
-    // 🔥 AGORA CORRETO: só texto
+    // 🔥 só aceita TXT (como você definiu no backend)
     if (!f.name.toLowerCase().endsWith(".txt")) {
         setStatus("❌ Use apenas arquivos .txt para o referencial", "red");
         return;
@@ -103,18 +117,34 @@ async function uploadBase() {
     setStatus("⏳ Enviando referencial teórico...");
 
     try {
+
         const res = await fetch(`${API_URL}/api/upload/base`, {
             method: 'POST',
             body: fd
         });
 
-        if (!res.ok) throw new Error("Erro no upload base");
+        const text = await res.text();
 
-        setStatus(`📚 Referencial adicionado com sucesso!\nArquivo: ${f.name}`, "#4ade80");
+        let data;
+
+        try {
+            data = JSON.parse(text);
+        } catch {
+            throw new Error("Resposta inválida do servidor");
+        }
+
+        if (!res.ok) {
+            throw new Error(data.erro || "Erro no upload do referencial");
+        }
+
+        setStatus(
+            `📚 Referencial adicionado com sucesso!\n📁 ${f.name}`,
+            "#4ade80"
+        );
 
     } catch (err) {
         console.error(err);
-        setStatus("❌ Erro ao enviar referencial", "red");
+        setStatus(`❌ ${err.message}`, "red");
     }
 
     carregando = false;
@@ -141,12 +171,12 @@ async function pdf() {
         const res = await fetch(`${API_URL}/api/export/pdf`);
 
         if (!res.ok) {
-            throw new Error("Erro ao gerar PDF");
+            throw new Error("Erro ao gerar PDF no servidor");
         }
 
         const blob = await res.blob();
 
-        // 🔥 VERIFICA SE VEM VAZIO
+        // 🔥 verifica se PDF veio válido
         if (blob.size < 1000) {
             throw new Error("PDF vazio ou inválido");
         }
@@ -167,8 +197,8 @@ async function pdf() {
         setStatus("✅ Relatório gerado e baixado com sucesso!", "#4ade80");
 
     } catch (err) {
-        console.error(err);
-        setStatus("❌ Erro ao gerar relatório. Tente novamente.", "red");
+        console.error("ERRO PDF:", err);
+        setStatus(`❌ ${err.message}`, "red");
     }
 
     carregando = false;
