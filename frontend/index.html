@@ -11,15 +11,33 @@
 
 <body>
 
-<h1>📊 Sistema TCC</h1>
+<div class="login-container">
 
-<div class="container">
-    <input type="file" id="file">
+    <h1>📊 Sistema TCC</h1>
+    <p class="subtitle">Análise automática de questionários</p>
 
-    <button onclick="upload()">Enviar</button>
-    <button onclick="pdf()">Gerar PDF</button>
+    <!-- Upload CSV -->
+    <div class="input-group">
+        <label>Arquivo CSV (Google Forms)</label>
+        <input type="file" id="file">
+    </div>
 
-    <pre id="resultado"></pre>
+    <button onclick="upload()">Enviar Dados</button>
+
+    <!-- Upload Texto Base -->
+    <div class="input-group">
+        <label>Texto Base (PDF ou DOC)</label>
+        <input type="file" id="baseFile">
+    </div>
+
+    <button onclick="uploadBase()">Enviar Texto Base</button>
+
+    <!-- Gerar PDF -->
+    <button class="primary" onclick="pdf()">📄 Gerar Relatório</button>
+
+    <!-- Feedback -->
+    <div id="status"></div>
+
 </div>
 
 <!-- JS -->
