@@ -10,11 +10,12 @@ function setStatus(msg, cor = "#ccc") {
     status.style.color = cor;
 }
 
-// 🔒 Bloquear botões durante processamento
+// 🔒 Controle de botões
 function toggleButtons(disabled) {
     document.querySelectorAll("button").forEach(btn => {
         btn.disabled = disabled;
         btn.style.opacity = disabled ? 0.6 : 1;
+        btn.style.cursor = disabled ? "not-allowed" : "pointer";
     });
 }
 
@@ -31,7 +32,13 @@ async function upload() {
     }
 
     if (!f.name.toLowerCase().endsWith(".csv")) {
-        setStatus("❌ O arquivo deve ser .csv (exportado do Google Forms)", "red");
+        setStatus("❌ O arquivo deve ser .csv (Google Forms)", "red");
+        return;
+    }
+
+    // 🔍 valida tamanho (evita travar)
+    if (f.size > 5 * 1024 * 1024) {
+        setStatus("❌ Arquivo muito grande (máx 5MB)", "red");
         return;
     }
 
@@ -56,20 +63,20 @@ async function upload() {
         dadosEnviados = true;
 
         setStatus(
-            `✅ Dados analisados com sucesso (${data.modo})\n📁 ${f.name}`,
+            `✅ Dados enviados com sucesso!\nModo: ${data.modo}\nArquivo: ${f.name}`,
             "#4ade80"
         );
 
     } catch (err) {
         console.error(err);
-        setStatus("❌ Falha ao enviar arquivo", "red");
+        setStatus("❌ Falha ao enviar arquivo. Verifique o servidor.", "red");
     }
 
     carregando = false;
     toggleButtons(false);
 }
 
-// 📚 Upload Texto Base (PDF/DOC/TXT)
+// 📚 Upload Texto Base
 async function uploadBase() {
 
     if (carregando) return;
@@ -81,10 +88,9 @@ async function uploadBase() {
         return;
     }
 
-    const permitido = ['.pdf', '.doc', '.docx', '.txt'];
-
-    if (!permitido.some(ext => f.name.toLowerCase().endsWith(ext))) {
-        setStatus("❌ Formato inválido (use PDF, DOC ou TXT)", "red");
+    // 🔥 AGORA CORRETO: só texto
+    if (!f.name.toLowerCase().endsWith(".txt")) {
+        setStatus("❌ Use apenas arquivos .txt para o referencial", "red");
         return;
     }
 
@@ -94,7 +100,7 @@ async function uploadBase() {
     let fd = new FormData();
     fd.append('file', f);
 
-    setStatus("⏳ Integrando referencial teórico...");
+    setStatus("⏳ Enviando referencial teórico...");
 
     try {
         const res = await fetch(`${API_URL}/api/upload/base`, {
@@ -104,11 +110,11 @@ async function uploadBase() {
 
         if (!res.ok) throw new Error("Erro no upload base");
 
-        setStatus(`📚 Texto base incorporado com sucesso\n📁 ${f.name}`, "#4ade80");
+        setStatus(`📚 Referencial adicionado com sucesso!\nArquivo: ${f.name}`, "#4ade80");
 
     } catch (err) {
         console.error(err);
-        setStatus("❌ Erro ao enviar texto base", "red");
+        setStatus("❌ Erro ao enviar referencial", "red");
     }
 
     carregando = false;
@@ -140,9 +146,14 @@ async function pdf() {
 
         const blob = await res.blob();
 
-        // 🔥 DOWNLOAD AUTOMÁTICO (funciona em todos navegadores)
+        // 🔥 VERIFICA SE VEM VAZIO
+        if (blob.size < 1000) {
+            throw new Error("PDF vazio ou inválido");
+        }
+
         const url = window.URL.createObjectURL(blob);
 
+        // 📥 download automático
         const link = document.createElement('a');
         link.href = url;
         link.download = "relatorio-tcc.pdf";
@@ -153,11 +164,11 @@ async function pdf() {
         link.remove();
         window.URL.revokeObjectURL(url);
 
-        setStatus("✅ PDF gerado e baixado com sucesso!", "#4ade80");
+        setStatus("✅ Relatório gerado e baixado com sucesso!", "#4ade80");
 
     } catch (err) {
         console.error(err);
-        setStatus("❌ Erro ao gerar relatório", "red");
+        setStatus("❌ Erro ao gerar relatório. Tente novamente.", "red");
     }
 
     carregando = false;

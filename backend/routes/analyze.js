@@ -61,14 +61,21 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// 📥 Upload base (PDF/DOC/TXT)
+// 📥 Upload texto base
 router.post('/upload/base', upload.single('file'), async (req, res) => {
-    textosBase.push(req.file.buffer.toString());
+
+    const texto = req.file.buffer.toString('utf-8').trim();
+
+    if (texto.length > 50) {
+        textosBase.push(texto);
+    }
+
     res.json({ msg: "Texto base enviado" });
 });
 
 // 📄 GERAR PDF
 router.get('/export/pdf', async (req, res) => {
+
     let dados = isConnected() ? await Response.find() : dadosMemoria;
 
     if (!dados.length) {
@@ -76,7 +83,7 @@ router.get('/export/pdf', async (req, res) => {
     }
 
     const resultado = analyzeResponses(dados);
-    const texto = gerarTextoCorrido(resultado);
+    const textoPrincipal = gerarTextoCorrido(resultado);
 
     const doc = new PDFDocument({ margin: 70 });
 
@@ -85,8 +92,10 @@ router.get('/export/pdf', async (req, res) => {
 
     doc.pipe(res);
 
+    const temReferencial = textosBase.length > 0;
+
     // =========================
-    // 1. CAPA
+    // CAPA
     // =========================
     doc.fontSize(20).text('RELATÓRIO DE ANÁLISE DE QUESTIONÁRIO', { align: 'center' });
     doc.moveDown(2);
@@ -99,28 +108,44 @@ router.get('/export/pdf', async (req, res) => {
     doc.addPage();
 
     // =========================
-    // 2. INTRODUÇÃO
+    // INTRODUÇÃO
     // =========================
     doc.fontSize(16).text('1. INTRODUÇÃO', { underline: true });
     doc.moveDown();
 
-    doc.fontSize(12).text(
-        "Este relatório tem como objetivo apresentar a análise dos dados obtidos por meio da aplicação de um questionário, visando compreender o uso de tecnologias educacionais no contexto escolar.",
-        { align: 'justify' }
-    );
+    let intro = "Este relatório apresenta a análise dos dados obtidos por meio da aplicação de um questionário, com o objetivo de compreender o uso de tecnologias educacionais no contexto escolar.";
+
+    if (temReferencial) {
+        intro += " A análise está fundamentada em estudos teóricos que discutem a integração da tecnologia no processo de ensino e aprendizagem.";
+    }
+
+    doc.fontSize(12).text(intro, { align: 'justify' });
 
     doc.moveDown();
 
     // =========================
-    // 3. RESULTADOS E DISCUSSÃO
+    // RESULTADOS
     // =========================
     doc.fontSize(16).text('2. RESULTADOS E DISCUSSÃO', { underline: true });
     doc.moveDown();
 
-    doc.fontSize(12).text(texto, { align: 'justify' });
+    doc.fontSize(12).text(textoPrincipal, { align: 'justify' });
+
+    // 🔥 Referencial integrado
+    if (temReferencial) {
+        doc.moveDown();
+
+        textosBase.forEach((t, i) => {
+            doc.fontSize(10).text(
+                `Segundo o referencial teórico (${i + 1}), ${t.substring(0, 200)}...`,
+                { align: 'justify' }
+            );
+            doc.moveDown();
+        });
+    }
 
     // =========================
-    // 4. ANÁLISE POR PERGUNTA
+    // ANÁLISE POR PERGUNTA
     // =========================
     let contador = 1;
 
@@ -132,77 +157,84 @@ router.get('/export/pdf', async (req, res) => {
         doc.moveDown();
 
         let r = resultado[p];
-
         const aberta = ehPerguntaAberta(r);
 
         if (!aberta) {
             // 📊 PERGUNTA FECHADA
+
+            let total = Object.values(r).reduce((a, b) => a + b, 0);
+            let ordenado = Object.entries(r).sort((a, b) => b[1] - a[1]);
+
+            let principal = ordenado[0];
+            let porcentagem = ((principal[1] / total) * 100).toFixed(1);
 
             let img = await gerarGrafico(p, r, 'pie');
             doc.image(img, { width: 450, align: 'center' });
 
             doc.moveDown();
 
-            img = await gerarGrafico(p, r, 'line');
-            doc.image(img, { width: 450, align: 'center' });
+            let textoAnalise = `Observa-se que a alternativa mais selecionada foi "${principal[0]}", representando ${porcentagem}% dos participantes, indicando uma tendência predominante entre os respondentes.`;
+
+            if (temReferencial) {
+                textoAnalise += " Esse resultado está em consonância com estudos sobre o uso de tecnologias educacionais no ambiente escolar.";
+            }
+
+            doc.fontSize(12).text(textoAnalise, { align: 'justify' });
 
             doc.moveDown();
 
             doc.fontSize(11).text('Distribuição das respostas:', { underline: true });
             doc.moveDown(0.5);
 
-            for (let x in r) {
-                doc.text(`• ${x}: ${r[x]} respostas`);
-            }
+            ordenado.forEach(([resp, qtd]) => {
+                let perc = ((qtd / total) * 100).toFixed(1);
+                doc.text(`• ${resp}: ${qtd} (${perc}%)`);
+            });
 
         } else {
             // 🧠 PERGUNTA ABERTA
 
-            doc.fontSize(12).text(
-                "Esta questão apresenta respostas abertas, caracterizadas pela diversidade de opiniões dos participantes.",
-                { align: 'justify' }
-            );
+            const respostasTexto = Object.keys(r);
+            const analise = analisarTexto(respostasTexto);
+
+            let textoAberto = analise.resumo;
+
+            if (temReferencial) {
+                textoAberto += " Essa interpretação pode ser relacionada com estudos que abordam práticas pedagógicas mediadas por tecnologia.";
+            }
+
+            doc.fontSize(12).text(textoAberto, { align: 'justify' });
 
             doc.moveDown();
 
-            const respostasTexto = Object.keys(r);
-
-            const analise = analisarTexto(respostasTexto);
-
-            doc.text(analise.resumo, { align: 'justify' });
+            if (analise.exemplos) {
+                doc.fontSize(11).text("Exemplos de respostas:", { underline: true });
+                doc.moveDown(0.5);
+                doc.text(analise.exemplos);
+            }
         }
 
         contador++;
     }
 
     // =========================
-    // 5. REFERENCIAL TEÓRICO
-    // =========================
-    if (textosBase.length > 0) {
-        doc.addPage();
-
-        doc.fontSize(16).text('3. REFERENCIAL TEÓRICO', { underline: true });
-        doc.moveDown();
-
-        textosBase.forEach(t => {
-            doc.fontSize(12).text(t, { align: 'justify' });
-            doc.moveDown();
-        });
-    }
-
-    // =========================
-    // 6. ANÁLISE GERAL DAS RESPOSTAS ABERTAS
+    // CONCLUSÃO
     // =========================
     let abertas = dados.map(d => Object.values(d.respostas)).flat();
-
     let ia = analisarTexto(abertas);
 
     doc.addPage();
 
-    doc.fontSize(16).text('4. ANÁLISE DAS RESPOSTAS ABERTAS', { underline: true });
+    doc.fontSize(16).text('3. CONSIDERAÇÕES FINAIS', { underline: true });
     doc.moveDown();
 
-    doc.fontSize(12).text(ia.resumo, { align: 'justify' });
+    let conclusao = ia.resumo;
+
+    if (temReferencial) {
+        conclusao += " Os resultados dialogam com a literatura da área, reforçando a importância do uso das tecnologias educacionais no processo de ensino e aprendizagem.";
+    }
+
+    doc.fontSize(12).text(conclusao, { align: 'justify' });
 
     doc.end();
 });
